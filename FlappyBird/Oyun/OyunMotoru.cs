@@ -66,10 +66,13 @@ namespace FlappyBird.Oyun
             Kus.Sifirla(Yukseklik * 0.4f);
 
             _borular.Clear();
+            float? oncekiBoslukY = null;
             for (int i = 0; i < BoruSayisi; i++)
             {
                 float x = Genislik + 120 + i * BorularArasiMesafe;
-                _borular.Add(new BoruCifti(x, RastgeleBoslukY(), ZeminY));
+                float boslukY = RastgeleBoslukY(oncekiBoslukY);
+                _borular.Add(new BoruCifti(x, boslukY, ZeminY));
+                oncekiBoslukY = boslukY;
             }
 
             Durum = OyunDurumu.Hazir;
@@ -95,12 +98,24 @@ namespace FlappyBird.Oyun
             else if (Durum == OyunDurumu.Duraklatildi) Durum = OyunDurumu.Oynaniyor;
         }
 
+        /// <summary>Açıkken kuş kendi kendine uçar (demo / test için).</summary>
+        public bool OtomatikPilot { get; set; }
+
         /// <summary>Oyun döngüsünün bir adımı: hareket, skor, çarpışma.</summary>
         public void Guncelle()
         {
+            if (OtomatikPilot && Durum == OyunDurumu.Hazir)
+            {
+                Durum = OyunDurumu.Oynaniyor;
+            }
             if (Durum != OyunDurumu.Oynaniyor)
             {
                 return;
+            }
+
+            if (OtomatikPilot)
+            {
+                OtomatikPilotKarari();
             }
 
             Kus.Guncelle();
@@ -119,14 +134,36 @@ namespace FlappyBird.Oyun
                 if (boru.EkranDisinda)
                 {
                     // En sağdaki borunun arkasına taşı: borular sonsuz döngüde akar.
-                    float enSagX = _borular.Max(b => b.X);
-                    boru.YenidenKonumlandir(enSagX + BorularArasiMesafe, RastgeleBoslukY());
+                    BoruCifti enSagdaki = _borular.MaxBy(b => b.X)!;
+                    boru.YenidenKonumlandir(enSagdaki.X + BorularArasiMesafe,
+                                            RastgeleBoslukY(enSagdaki.BoslukY));
                 }
             }
 
             if (CarpismaVar())
             {
                 OyunuBitir();
+            }
+        }
+
+        /// <summary>
+        /// Basit otomatik pilot: önündeki ilk borunun boşluğunun alt kısmına göre karar verir.
+        /// Kuş hedefin altına düşmeye başlamışsa zıplatır.
+        /// </summary>
+        private void OtomatikPilotKarari()
+        {
+            BoruCifti? siradaki = _borular
+                .Where(b => b.X + BoruCifti.Genislik >= Kus.X)
+                .OrderBy(b => b.X)
+                .FirstOrDefault();
+
+            float hedefY = siradaki != null
+                ? siradaki.BoslukY + BoruCifti.BoslukYuksekligi - Kus.Boyut - 30
+                : Yukseklik * 0.4f;
+
+            if (Kus.Y > hedefY && Kus.Hiz >= -2)
+            {
+                Kus.Ziplat();
             }
         }
 
@@ -160,11 +197,23 @@ namespace FlappyBird.Oyun
             OyunBitti?.Invoke(this, EventArgs.Empty);
         }
 
-        private float RastgeleBoslukY()
+        /// <summary>
+        /// Yeni boşluk için rastgele bir yükseklik seçer. Bir önceki boşluk verilirse yeni boşluk
+        /// ondan en fazla MaksBoslukFarki kadar uzak olur; böylece yetişilemeyecek bir boru çıkmaz.
+        /// </summary>
+        private float RastgeleBoslukY(float? oncekiBoslukY = null)
         {
             const float kenarPayi = 60f;
+            const float MaksBoslukFarki = 140f;
+
+            float enUst = kenarPayi;
             float enAlt = ZeminY - BoruCifti.BoslukYuksekligi - kenarPayi;
-            return kenarPayi + (float)_rastgele.NextDouble() * (enAlt - kenarPayi);
+            if (oncekiBoslukY.HasValue)
+            {
+                enUst = Math.Max(enUst, oncekiBoslukY.Value - MaksBoslukFarki);
+                enAlt = Math.Min(enAlt, oncekiBoslukY.Value + MaksBoslukFarki);
+            }
+            return enUst + (float)_rastgele.NextDouble() * (enAlt - enUst);
         }
     }
 }
