@@ -12,6 +12,7 @@ namespace FlappyBird
     public partial class OyunFormu : Form
     {
         private OyunMotoru _motor = null!;   // Load olayında oluşturulur
+        private readonly YuksekSkorDeposu _rekorDeposu = new();
 
         private readonly Font _buyukYazi = new("Segoe UI", 28F, FontStyle.Bold);
         private readonly Font _kucukYazi = new("Segoe UI", 12F, FontStyle.Bold);
@@ -25,7 +26,8 @@ namespace FlappyBird
         private void OyunFormu_Load(object sender, EventArgs e)
         {
             // Oyun alanının gerçek boyutu (ekran ölçeklemesi dahil) PictureBox'tan alınır.
-            _motor = new OyunMotoru(pbOyun.ClientSize.Width, pbOyun.ClientSize.Height);
+            _motor = new OyunMotoru(pbOyun.ClientSize.Width, pbOyun.ClientSize.Height,
+                                    _rekorDeposu.Oku());
             _motor.SkorDegisti += Motor_SkorDegisti;
             _motor.OyunBitti += Motor_OyunBitti;
 
@@ -55,6 +57,13 @@ namespace FlappyBird
 
         private void Motor_OyunBitti(object? sender, EventArgs e)
         {
+            // Yeni rekor kırıldıysa dosyaya yaz. Yazılamazsa oyun durmaz, sadece başlıkta belirtilir.
+            if (_motor.Skor > 0 && _motor.Skor == _motor.EnYuksekSkor)
+            {
+                bool yazildi = _rekorDeposu.Kaydet(_motor.EnYuksekSkor);
+                Text = yazildi ? "Flappy Bird — YMH219 (yeni rekor kaydedildi!)"
+                               : "Flappy Bird — YMH219 (rekor dosyaya yazılamadı)";
+            }
             BilgileriGuncelle();
         }
 
@@ -146,6 +155,7 @@ namespace FlappyBird
 
         private void YeniOyunBaslat()
         {
+            Text = "Flappy Bird — YMH219";
             _motor.YeniOyun();
             pbOyun.Invalidate();
         }
